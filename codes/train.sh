@@ -1,5 +1,5 @@
 echo "\n\n------- PreTraining Layer 1 -------\n\n"
-th da.lua -nHidden 2500 -loader preProcessed.t7 -save mae1 -optimization rmsprop
+th da.lua -nHidden 2500 -loader data_pretrain.t7 -save mae1 -optimization rmsprop
 echo "\n\n------- Encoding Data -------------\n\n"
 th encode.lua -loader preProcessed.t7 -model mae1/model.net -save encoded1.t7
 echo "\n\n------- PreTraining Layer 2 -------\n\n"

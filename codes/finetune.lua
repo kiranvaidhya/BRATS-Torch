@@ -9,8 +9,8 @@ cmd:text()
 cmd:text('Options')
 -- general options:
 cmd:option('-batchSize',96,'batchSize: 96')
-cmd:option('-loader','preProcessed.t7','Data: preProcessed.t7')
-cmd:option('-learningRate', 1e-3, 'learning rate at t=0')
+cmd:option('-loader','data/f_train.t7','Data: preProcessed.t7')
+cmd:option('-learningRate', 0.01, 'learning rate at t=0')
 cmd:option('-weightDecay', 0, 'weight decay (SGD only)')
 cmd:option('-momentum', 0, 'momentum (SGD only)')
 cmd:option('-learningRateDecay',1e-07,'LR decay')
@@ -20,6 +20,7 @@ cmd:option('-optimization', 'SGD', 'optimization method: SGD | ASGD | CG | LBFGS
 cmd:option('-mode','pretrained','mode: pretrained | random')
 cmd:option('-coefL1',0,'coefL1')
 cmd:option('-coefL2',0,'coefL2')
+cmd:option('-epochs',800,'Number of epochs')
 cmd:option('-save', 'finetuningResults', 'subdirectory to save/log experiments in')
 cmd:text()
 
@@ -82,27 +83,32 @@ else
 end
 
 if opt.mode == 'pretrained' then
-	model = torch.load('ae1/model.net')
-	model:remove(3)
+	-- model = torch.load('results/ae1/model.net')
+	-- model:remove(3)
 
-	da2 = torch.load('ae2/model.net')
-	da2:remove(3)
+	-- da2 = torch.load('results/ae2/model.net')
+	-- da2:remove(3)
 
-	model:add(da2:get(1))
-	model:add(da2:get(2))
+	-- model:add(da2:get(1))
+	-- model:add(da2:get(2))
 
-	da3 = torch.load('ae3/model.net')
-	da3:remove(3)
+	-- da3 = torch.load('results/ae3/model.net')
+	-- da3:remove(3)
 
-	model:add(da3:get(1))
-	model:add(da3:get(2))
+ --  -- model:add(nn.Dropout(0.4))
 
-	model:add(nn.Linear(500,5))
+	-- model:add(da3:get(1))
+	-- model:add(da3:get(2))
 
-	model:get(7).weight:zero()
-	model:get(7).bias:zero()
+ --  model:add(nn.Dropout(0.2))
 
-	model:add(cudnn.LogSoftMax())
+	-- model:add(nn.Linear(500,5))
+
+	-- model:get(8).weight:zero()
+	-- model:get(8).bias:zero()
+
+	-- model:add(cudnn.LogSoftMax())
+  dofile('theanoweights.lua')
 
 else
 	model = nn.Sequential()
@@ -131,6 +137,10 @@ testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
 -- into a 1-dim vector
 
 parameters,gradParameters = model:getParameters()
+
+testData = torch.load('data/f_validate.t7')
+testData.labels = testData.labels + 1
+dofile('validate.lua')
 
 
 function train()
@@ -214,10 +224,10 @@ function train()
    end
 
    -- save/log current net
-   local filename = paths.concat(opt.save, 'model'..tostring(epoch)..'.net')
-   os.execute('mkdir -p ' .. sys.dirname(filename))
-   print('==> saving model to '..filename)
-   torch.save(filename, model)
+   -- local filename = paths.concat(opt.save, 'model'..tostring(epoch)..'.net')
+   -- os.execute('mkdir -p ' .. sys.dirname(filename))
+   -- print('==> saving model to '..filename)
+   -- torch.save(filename, model)
 
    -- next epoch
    confusion:zero()
@@ -226,8 +236,10 @@ end
 
 print '==> Starting Training..'
 
+bestScore = 0
 epoch = 1
-for i = 1,100 do
+for i = 1,opt.epochs do
 	train()
+  test()
 end
 
