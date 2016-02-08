@@ -2,6 +2,7 @@ require 'cudnn'
 require 'cunn'
 require 'optim'
 require 'randomkit'
+require 'sgd_anneal'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -16,8 +17,9 @@ cmd:option('-momentum', 0, 'momentum (SGD only)')
 cmd:option('-learningRateDecay',1e-07,'LR decay')
 cmd:option('-nHidden',1000,'Number of hidden neurons')
 cmd:option('-noise',0.2,'Masking noise')
-cmd:option('-optimization', 'SGD', 'optimization method: SGD | ASGD | CG | LBFGS | adagrad')
-cmd:option('-mode','pretrained','mode: pretrained | random')
+cmd:option('-optimization', 'SGD', 'optimization method: SGD | ASGD | CG | LBFGS | adagrad | sgdanneal')
+cmd:option('-mode','pretrained','mode: pretrained | random | finetuned')
+cmd:option('-modelPath','results/finetuningResults/model.net','Path to finetuned model')
 cmd:option('-coefL1',0,'coefL1')
 cmd:option('-coefL2',0,'coefL2')
 cmd:option('-epochs',800,'Number of epochs')
@@ -62,6 +64,15 @@ elseif opt.optimization == 'adagrad' then
       learningRate = opt.learningRate,
     }
     optimMethod = optim.adagrad
+elseif opt.optimization == 'sgdanneal' then
+	optimState = {
+      learningRate = opt.learningRate,
+      weightDecay = opt.weightDecay,
+      momentum = opt.momentum,
+      learningRateDecay = opt.learningRateDecay
+   }
+   optimMethod = optim.sgd2
+
 
 else
    error('unknown optimization method')
@@ -83,37 +94,41 @@ else
 end
 
 if opt.mode == 'pretrained' then
-	-- model = torch.load('results/ae1/model.net')
-	-- model:remove(3)
+	model = torch.load('results/ae1/latestModel.net')
+	model:remove(3)
 
-	-- da2 = torch.load('results/ae2/model.net')
-	-- da2:remove(3)
+	da2 = torch.load('results/ae2/latestModel.net')
+	da2:remove(3)
 
-	-- model:add(da2:get(1))
-	-- model:add(da2:get(2))
+	model:add(da2:get(1))
+	model:add(da2:get(2))
 
-	-- da3 = torch.load('results/ae3/model.net')
-	-- da3:remove(3)
+	da3 = torch.load('results/ae3/latestModel.net')
+	da3:remove(3)
 
- --  -- model:add(nn.Dropout(0.4))
+  -- model:add(nn.Dropout(0.4))
 
-	-- model:add(da3:get(1))
-	-- model:add(da3:get(2))
+	model:add(da3:get(1))
+	model:add(da3:get(2))
 
- --  model:add(nn.Dropout(0.2))
+  -- model:add(nn.Dropout(0.4))
 
-	-- model:add(nn.Linear(500,5))
+	model:add(nn.Linear(500,5))
 
-	-- model:get(8).weight:zero()
-	-- model:get(8).bias:zero()
+	model:get(7).weight:zero()
+	model:get(7).bias:zero()
 
-	-- model:add(cudnn.LogSoftMax())
-  dofile('theanoweights.lua')
+	model:add(cudnn.LogSoftMax())
+  -- dofile('theanoweights.lua')
 
-else
+elseif opt.mode == 'random' then
 	model = nn.Sequential()
 	model:add(nn.Linear(1024,opt.nHidden))
 	model:add(nn.Sigmoid())
+
+elseif opt.mode == 'finetuned' then
+	model = torch.load(opt.modelPath)
+
 end
 
 model = model:cuda()
@@ -204,9 +219,11 @@ function train()
       if optimMethod == optim.asgd then
          _,_,average = optimMethod(feval, parameters, optimState)
       else
-         optimMethod(feval, parameters, optimState)
+         _,_,clr = optimMethod(feval, parameters, optimState)
       end
    end
+
+   print("\nLearningRate: ", clr)
 
    -- time taken
    time = sys.clock() - time
@@ -224,10 +241,10 @@ function train()
    end
 
    -- save/log current net
-   -- local filename = paths.concat(opt.save, 'model'..tostring(epoch)..'.net')
-   -- os.execute('mkdir -p ' .. sys.dirname(filename))
-   -- print('==> saving model to '..filename)
-   -- torch.save(filename, model)
+   local filename = paths.concat('results',opt.save, 'latestmodel.net')
+   os.execute('mkdir -p ' .. sys.dirname(filename))
+   print('==> saving model to '..filename)
+   torch.save(filename, model)
 
    -- next epoch
    confusion:zero()

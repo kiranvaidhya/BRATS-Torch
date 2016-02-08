@@ -78,6 +78,12 @@ elseif opt.optimization == 'nag' then
 		learningRateDecay = opt.learningRateDecay
 	}
 	optimMethod = optim.nag
+elseif opt.optimization == 'armsprop' then
+	optimState = {
+		learningRate = opt.learningRate,
+		learningRateDecay = opt.learningRateDecay
+	}
+	optimMethod = optim.rmsprop2
 else
    error('unknown optimization method')
 end
@@ -92,8 +98,8 @@ parameters, gradParameters = model:getParameters()
 -------------------------------------------------------------------------------
 -------------------------------------------------------------------------------
 
-trainLogger = optim.Logger(paths.concat(opt.save, 'train.log'))
-testLogger = optim.Logger(paths.concat(opt.save, 'test.log'))
+trainLogger = optim.Logger(paths.concat('results',opt.save, 'train.log'))
+testLogger = optim.Logger(paths.concat('results',opt.save, 'test.log'))
 
 
 
@@ -161,13 +167,19 @@ function train(model, data, noisedData)
 		-- optimize on current mini-batch
 		if optimMethod == optim.asgd then
 			_,_,average = optimMethod(feval, parameters, optimState)
+		elseif optimMethod == optim.rmsprop2 then
+			_,fs,alr = optimMethod(feval, parameters, optimState,epoch)
 		else
-			_,fs = optimMethod(feval, parameters, optimState)
+			_,fs = optimMethod(feval,parameters,optimState)
 		end
 
 		err = err + fs[1]
 
    end
+
+   if optimMethod == optim.rmsprop2 then
+   		print('\nLearningRate: ', alr)
+   	end
 
    -- time taken
    time = sys.clock() - time
@@ -176,6 +188,12 @@ function train(model, data, noisedData)
 
    err = err / data.data:size(1)
    score = score / data.data:size(1)
+
+	local filename = paths.concat('results',opt.save, 'latestModel.net')
+	os.execute('mkdir -p ' .. sys.dirname(filename))
+	print('\n==> saving model to '..filename)
+	torch.save(filename, model)
+	bestScore = score
 
    print("\n==> Reconstruction Error: "..(score))
 

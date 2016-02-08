@@ -1,4 +1,5 @@
 require 'cunn'
+require 'cudnn'
 require 'optim'
 require 'randomkit'
 
@@ -24,10 +25,11 @@ if opt.loader == 'preProcessed.t7' then
 	data.data = data.data:reshape(data.data:size(1),pSize*pSize)
 	pSize = pSize*pSize
 else
-	data = {
-	data = data
-}
-	data.data = data.data:cuda()
+	if type(data) ~= "table" then
+		data = {
+		data = data
+		}
+	end
 	pSize = data.data:size(2)
 end
 
